@@ -521,6 +521,116 @@ func TestNewResolver_FileFilterFallsToProject(t *testing.T) {
 	}
 }
 
+func TestResolveDetail_SystemDefault(t *testing.T) {
+	resolver, _, err := NewResolver(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+	dr := resolver.(DetailResolver)
+
+	detail := dr.ResolveDetail("readme.md")
+	if detail.Source != "system" {
+		t.Errorf("expected source 'system', got %q", detail.Source)
+	}
+	if detail.Pattern != "default" {
+		t.Errorf("expected pattern 'default', got %q", detail.Pattern)
+	}
+	if !strings.Contains(detail.Rule, "Correctness") {
+		t.Errorf("expected default rule content, got %q", truncate(detail.Rule, 80))
+	}
+}
+
+func TestResolveDetail_SystemPatternMatch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	resolver, _, err := NewResolver(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+	dr := resolver.(DetailResolver)
+
+	detail := dr.ResolveDetail("src/main/foo.java")
+	if detail.Source != "system" {
+		t.Errorf("expected source 'system', got %q", detail.Source)
+	}
+	if detail.Pattern != "**/*.java" {
+		t.Errorf("expected pattern '**/*.java', got %q", detail.Pattern)
+	}
+	if !strings.Contains(detail.Rule, "逻辑错误识别") {
+		t.Errorf("expected java rule, got %q", truncate(detail.Rule, 80))
+	}
+}
+
+func TestResolveDetail_ProjectOverridesSystem(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"src/**/*.java","rule":"project-java-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+	dr := resolver.(DetailResolver)
+
+	detail := dr.ResolveDetail("src/main/foo.java")
+	if detail.Source != "project" {
+		t.Errorf("expected source 'project', got %q", detail.Source)
+	}
+	if detail.Pattern != "src/**/*.java" {
+		t.Errorf("expected pattern 'src/**/*.java', got %q", detail.Pattern)
+	}
+	if detail.Rule != "project-java-rule" {
+		t.Errorf("expected 'project-java-rule', got %q", detail.Rule)
+	}
+
+	// Unmatched path falls to system
+	detail = dr.ResolveDetail("other/bar.java")
+	if detail.Source != "system" {
+		t.Errorf("expected source 'system', got %q", detail.Source)
+	}
+}
+
+func TestResolveDetail_CustomOverridesAll(t *testing.T) {
+	// Project rule
+	repoDir := t.TempDir()
+	ocrDir := filepath.Join(repoDir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	projJSON := `{"rules":[{"path":"**/*.java","rule":"project-java-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projJSON), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Custom rule (highest priority)
+	customDir := t.TempDir()
+	customJSON := `{"rules":[{"path":"**/*.java","rule":"custom-java-rule"}]}`
+	customPath := filepath.Join(customDir, "custom.json")
+	if err := os.WriteFile(customPath, []byte(customJSON), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	resolver, _, err := NewResolver(repoDir, customPath)
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+	dr := resolver.(DetailResolver)
+
+	detail := dr.ResolveDetail("src/foo.java")
+	if detail.Source != "custom" {
+		t.Errorf("expected source 'custom', got %q", detail.Source)
+	}
+	if detail.Rule != "custom-java-rule" {
+		t.Errorf("expected 'custom-java-rule', got %q", detail.Rule)
+	}
+}
+
 func TestNewResolver_BraceExpansionInProjectRule(t *testing.T) {
 	dir := t.TempDir()
 	ocrDir := filepath.Join(dir, ".opencodereview")

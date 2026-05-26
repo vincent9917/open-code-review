@@ -103,6 +103,7 @@ ocr review --commit abc123
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `ocr review` | `ocr r` | Start a code review |
+| `ocr rules check <file>` | — | Preview which review rule applies to a file path |
 | `ocr config set <key> <value>` | — | Set configuration values |
 | `ocr llm test` | — | Test LLM connectivity |
 | `ocr viewer` | `ocr v` | Launch WebUI session viewer on `localhost:5483` |
@@ -137,6 +138,10 @@ ocr review --commit abc123 --format json --audience agent
 
 # Use custom review rules
 ocr review --rule /path/to/my-rules.json
+
+# Preview which rule applies to a file
+ocr rules check src/main/java/com/example/Foo.java
+ocr rules check --rule custom.json src/main/resources/mapper/UserMapper.xml
 
 # View review session history in browser
 ocr viewer

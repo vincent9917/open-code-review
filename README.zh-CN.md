@@ -103,6 +103,7 @@ ocr review --commit abc123
 | 命令 | 别名 | 描述 |
 |------|------|------|
 | `ocr review` | `ocr r` | 开始代码审查 |
+| `ocr rules check <file>` | — | 预览某个文件路径生效的审查规则 |
 | `ocr config set <key> <value>` | — | 设置配置项 |
 | `ocr llm test` | — | 测试 LLM 连通性 |
 | `ocr viewer` | `ocr v` | 启动 WebUI 会话查看器，地址 `localhost:5483` |
@@ -137,6 +138,10 @@ ocr review --commit abc123 --format json --audience agent
 
 # 使用自定义审查规则
 ocr review --rule /path/to/my-rules.json
+
+# 预览某个文件路径生效的规则
+ocr rules check src/main/java/com/example/Foo.java
+ocr rules check --rule custom.json src/main/resources/mapper/UserMapper.xml
 
 # 在浏览器中查看审查会话历史
 ocr viewer

@@ -108,6 +108,18 @@ func LoadDefault() (*SystemRule, error) {
 	return &rule, nil
 }
 
+// RuleDetail contains the resolved rule along with metadata about its source.
+type RuleDetail struct {
+	Rule    string // rule text
+	Source  string // "custom" | "project" | "global" | "system"
+	Pattern string // glob pattern that matched, or "default" for fallback
+}
+
+// DetailResolver extends Resolver with source metadata.
+type DetailResolver interface {
+	ResolveDetail(path string) RuleDetail
+}
+
 // Resolve returns the rule text for a given file path.
 // Patterns with brace expansion like "*.{go,py}" are expanded into "*.go", "*.py".
 // The first match wins; if none match, it falls back to DefaultRule.
@@ -122,6 +134,18 @@ func (r *SystemRule) Resolve(path string) string {
 		}
 	}
 	return r.DefaultRule
+}
+
+func (r *SystemRule) resolveDetail(path string) RuleDetail {
+	for _, pr := range r.PathRules {
+		expanded := expandBraces(pr.Pattern)
+		for _, p := range expanded {
+			if matched, _ := doublestar.Match(p, path); matched {
+				return RuleDetail{Rule: pr.Rule, Source: "system", Pattern: pr.Pattern}
+			}
+		}
+	}
+	return RuleDetail{Rule: r.DefaultRule, Source: "system", Pattern: "default"}
 }
 
 // expandBraces turns "{a,b,c}" style patterns into individual strings.
@@ -340,6 +364,20 @@ func (c *composedResolver) Resolve(path string) string {
 	return c.system.Resolve(path)
 }
 
+// ResolveDetail returns the matched rule along with its source layer and pattern.
+func (c *composedResolver) ResolveDetail(path string) RuleDetail {
+	if detail := matchProjectRuleDetail(c.custom, path, "custom"); detail != nil {
+		return *detail
+	}
+	if detail := matchProjectRuleDetail(c.project, path, "project"); detail != nil {
+		return *detail
+	}
+	if detail := matchProjectRuleDetail(c.global, path, "global"); detail != nil {
+		return *detail
+	}
+	return c.system.resolveDetail(path)
+}
+
 func matchProjectRule(pr *ProjectRule, path string) string {
 	if pr == nil {
 		return ""
@@ -353,4 +391,22 @@ func matchProjectRule(pr *ProjectRule, path string) string {
 		}
 	}
 	return ""
+}
+
+func matchProjectRuleDetail(pr *ProjectRule, path, source string) *RuleDetail {
+	if pr == nil {
+		return nil
+	}
+	for _, entry := range pr.Rules {
+		if entry.Rule == "" {
+			continue
+		}
+		expanded := expandBraces(entry.Path)
+		for _, p := range expanded {
+			if matched, _ := doublestar.Match(p, path); matched {
+				return &RuleDetail{Rule: entry.Rule, Source: source, Pattern: entry.Path}
+			}
+		}
+	}
+	return nil
 }
