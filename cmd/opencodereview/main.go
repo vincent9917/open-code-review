@@ -54,6 +54,8 @@ func dispatch() error {
 		return runRules(args[1:])
 	case "viewer":
 		return runViewer(args[1:])
+	case "glab":
+		return runGlab(args[1:])
 	case "-h", "--help":
 		printTopLevelUsage()
 		return nil
@@ -70,6 +72,7 @@ Usage:
 
 Commands:
   review, r    Start a code review
+  glab mr      Review a GitLab merge request via glab
   rules        Inspect and debug review rules
   config       Manage configuration settings
   llm          LLM utility commands
@@ -79,6 +82,8 @@ Commands:
 Examples:
   ocr review --from master --to dev        Review diff range
   ocr review --commit abc123               Review a single commit
+  ocr glab mr 123                          Review GitLab MR #123
+  ocr glab mr                              Auto-detect MR from current branch
   ocr config provider                      Interactive provider setup
   ocr config model                         Interactive model selection
   ocr config set llm.model opus-4-6        Set a config value
@@ -87,6 +92,7 @@ Examples:
   ocr version                              Show version info
 
 Use "ocr review -h" for more information about review.
+Use "ocr glab --help" for more information about GitLab MR review.
 Use "ocr rules -h" for more information about rules.
 Use "ocr config" for more information about config.
 Use "ocr llm" for more information about LLM utilities.

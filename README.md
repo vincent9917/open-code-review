@@ -339,6 +339,7 @@ See the [`examples/`](./examples/) directory for integration examples:
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `ocr review` | `ocr r` | Start a code review |
+| `ocr glab mr` | — | Review a GitLab merge request via glab |
 | `ocr rules check <file>` | — | Preview which review rule applies to a file path |
 | `ocr config provider` | — | Interactive provider setup (built-in, custom, or manual) |
 | `ocr config model` | — | Interactive model selection for the active provider |
@@ -369,6 +370,30 @@ See the [`examples/`](./examples/) directory for integration examples:
 | `--max-git-procs` | — | built-in | Max concurrent git subprocesses |
 | `--tools` | — | — | Path to custom JSON tools config |
 
+### `ocr glab mr` — GitLab Merge Request Review
+
+Review a GitLab merge request using `glab` CLI to fetch MR metadata and diff.
+
+```bash
+ocr glab mr [<id>] [review-flags...]
+```
+
+| Flag | Shorthand | Default | Description |
+|------|-----------|---------|-------------|
+| `<id>` | — | auto-detect | GitLab MR ID or URL; auto-detects from current branch if omitted |
+
+The command resolves the MR's `target_branch` as `--from` and `source_branch` as `--to`, then delegates to `ocr review`. The MR title and description are automatically passed as `--background` context. If the user explicitly provides `--background`, that value takes priority.
+
+**Prerequisites:** `glab` CLI installed and authenticated (`glab auth login`).
+
+**How it works:**
+
+```
+ocr glab mr <id>
+  → glab mr view <id> --output json  (get source_branch, target_branch, title)
+  → ocr review --from <target> --to <source> --background "<title>"
+```
+
 ## Examples
 
 ```bash
@@ -383,6 +408,12 @@ ocr config unset custom_providers.my-gateway
 # Preview which files will be reviewed (no LLM calls)
 ocr review --preview
 ocr review -c abc123 -p
+
+# Review a GitLab merge request (requires glab CLI)
+ocr glab mr 123
+ocr glab mr https://gitlab.com/group/project/-/merge_requests/123
+ocr glab mr 123 --preview
+ocr glab mr 123 --model claude-opus-4-6
 
 # Review workspace changes with default settings
 ocr review

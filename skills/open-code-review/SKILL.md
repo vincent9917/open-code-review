@@ -109,21 +109,27 @@ For each comment from the review output, classify by priority and report all iss
 - **Medium**: Reasonable concerns but context-dependent, style/performance suggestions, or fixes that require manual implementation
 - **Low**: Likely false positives, lacking sufficient context, nitpicks, or meaningless suggestions
 
-Report all comments grouped by priority level.
+Report all comments grouped by priority level. **All output (issue descriptions, recommendations, summaries) must be in Chinese (简体中文).**
 
-### Step 4: Fix
+### Step 4: Fix (only on explicit request)
 
-Before applying fixes, check whether the user requested automatic fixes:
+**Default behavior: DO NOT apply any fixes.** Only report issues and let the user decide what to do.
 
-- If the user explicitly requested "review and fix" or similar, proceed with automatic fixes
-- If the user only requested "review" without fix intent, ask for permission before applying any changes
+Only proceed with fixes when the user explicitly requests it with phrases like:
 
-When fixing issues and suggestions:
+- "review and fix"
+- "apply the fixes"
+- "fix the issues"
+- or similar explicit fix intent
+
+When the user explicitly requests fixes:
 
 - Focus on High and Medium priority items
 - Apply fixes directly to the code when safe and well-defined
 - For complex fixes requiring manual intervention, clearly describe what needs to be done
 - Always verify fixes with the user before committing
+
+If the user only requested "review" without clear fix intent, **stop after Step 3** — do not ask whether to fix, do not suggest applying fixes. Simply present the review results and wait for the user's next instruction.
 
 ## Output Format
 

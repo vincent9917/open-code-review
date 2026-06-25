@@ -337,6 +337,7 @@ ocr review \
 | 命令 | 别名 | 描述 |
 |------|------|------|
 | `ocr review` | `ocr r` | 开始代码审查 |
+| `ocr glab mr` | — | 通过 glab 审查 GitLab 合并请求 |
 | `ocr rules check <file>` | — | 预览某个文件路径生效的审查规则 |
 | `ocr config provider` | — | 交互式供应商设置（内置、自定义或手动） |
 | `ocr config model` | — | 为当前供应商交互式选择模型 |
@@ -367,6 +368,30 @@ ocr review \
 | `--max-git-procs` | — | 内置默认 | 最大并发 git 子进程数 |
 | `--tools` | — | — | 自定义 JSON 工具配置路径 |
 
+### `ocr glab mr` — GitLab 合并请求审查
+
+通过 `glab` CLI 获取 MR 元数据和差异，审查 GitLab 合并请求。
+
+```bash
+ocr glab mr [<id>] [审查参数...]
+```
+
+| 参数 | 缩写 | 默认值 | 描述 |
+|------|------|--------|------|
+| `<id>` | — | 自动检测 | GitLab MR ID 或 URL；省略时从当前分支自动检测 |
+
+该命令将 MR 的 `target_branch` 解析为 `--from`，`source_branch` 解析为 `--to`，然后委托给 `ocr review`。MR 标题和描述会自动作为 `--background` 上下文传入。如果用户显式指定了 `--background`，则优先使用用户指定的值。
+
+**前置条件：** 安装并认证 `glab` CLI（`glab auth login`）。
+
+**工作原理：**
+
+```
+ocr glab mr <id>
+  → glab mr view <id> --output json  （获取 source_branch、target_branch、标题）
+  → ocr review --from <target> --to <source> --background "<标题>"
+```
+
 ## 示例
 
 ```bash
@@ -381,6 +406,12 @@ ocr config unset custom_providers.my-gateway
 # 预览将被审查的文件（不调用 LLM）
 ocr review --preview
 ocr review -c abc123 -p
+
+# 审查 GitLab 合并请求（需要 glab CLI）
+ocr glab mr 123
+ocr glab mr https://gitlab.com/group/project/-/merge_requests/123
+ocr glab mr 123 --preview
+ocr glab mr 123 --model claude-opus-4-6
 
 # 使用默认设置审查工作区变更
 ocr review
