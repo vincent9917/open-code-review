@@ -249,6 +249,36 @@ func TestNewResolver_ProjectRuleHighestPriority(t *testing.T) {
 	}
 }
 
+func TestNewResolver_ProjectRuleFirstMatchWinsWithinFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// Project rule file:
+	//   <repo>/.opencodereview/rule.json
+	// Path under test:
+	//   internal/config/rules/system_rules.go -> matches both project entries.
+	// This verifies declaration order inside one JSON rule file: the first
+	// matching entry wins even when a later entry is more specific.
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"internal/**/*.go","rule":"first-go-rule"},{"path":"internal/config/**/*.go","rule":"second-config-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	got := resolver.Resolve("internal/config/rules/system_rules.go")
+	if got != "first-go-rule" {
+		t.Fatalf("expected first matching project rule, got %q", got)
+	}
+}
+
 func TestNewResolver_ProjectRuleFallsBackToSystem(t *testing.T) {
 	dir := t.TempDir()
 	ocrDir := filepath.Join(dir, ".opencodereview")
@@ -292,6 +322,194 @@ func TestNewResolver_CustomRuleOverridesDefault(t *testing.T) {
 	got = resolver.Resolve("readme.md")
 	if !strings.Contains(got, "Correctness") {
 		t.Errorf("expected system default rule, got %q", truncate(got, 80))
+	}
+}
+
+func TestNewResolver_EmptyRuleSkippedAndFallsBack(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"**/*.go","rule":""},{"path":"internal/**/*.go","rule":"second-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	// main.go matches the first entry (empty rule) — should skip it and fall
+	// back to system rule instead of returning "".
+	got := resolver.Resolve("main.go")
+	if got == "" {
+		t.Fatal("expected fallback to system rule, got empty string")
+	}
+
+	// internal/pkg/foo.go matches both entries — the empty first entry should
+	// be skipped, and the second entry should win.
+	got = resolver.Resolve("internal/pkg/foo.go")
+	if got != "second-rule" {
+		t.Fatalf("expected second-rule, got %q", got)
+	}
+}
+
+func TestNewResolver_EmptyRuleMergeSystemRuleReturnsSystemOnly(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"","merge_system_rule":true}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	systemRule, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault: %v", err)
+	}
+	wantSystemRule := systemRule.Resolve("main.go")
+
+	got := resolver.Resolve("main.go")
+	if got != wantSystemRule {
+		t.Fatalf("expected system rule only, got %q", truncate(got, 120))
+	}
+	if strings.Contains(got, "User-Specific Rules") {
+		t.Fatal("should not contain User-Specific Rules header when user rule is empty")
+	}
+}
+
+func TestNewResolver_ProjectRuleReplacesSystemRuleByDefault(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// Project rule file:
+	//   <repo>/.opencodereview/rule.json
+	// Path under test:
+	//   main.go -> matches the project **/*.go rule.
+	// This verifies the default behavior: a user rule replaces the system rule
+	// unless the matched rule entry opts into merge_system_rule.
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"project-go-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	got := resolver.Resolve("main.go")
+	if got != "project-go-rule" {
+		t.Fatalf("expected only project rule when merge is disabled, got %q", got)
+	}
+}
+
+func TestNewResolver_ProjectRuleMergesSystemRule(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// Project rule file:
+	//   <repo>/.opencodereview/rule.json
+	// Path under test:
+	//   main.go -> matches both the system Go rule and the project **/*.go rule.
+	// This verifies merge_system_rule keeps both rules without depending on the
+	// exact merge markdown or ordering.
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"**/*.go","rule":"project-go-rule","merge_system_rule":true}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	systemRule, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault: %v", err)
+	}
+	wantSystemRule := systemRule.Resolve("main.go")
+	wantUserRule := "project-go-rule"
+
+	got := resolver.Resolve("main.go")
+	systemIdx := strings.Index(got, wantSystemRule)
+	if systemIdx < 0 {
+		t.Fatalf("expected merged system rule, got %q", truncate(got, 120))
+	}
+	userIdx := strings.Index(got, wantUserRule)
+	if userIdx < 0 {
+		t.Fatalf("expected merged project rule, got %q", truncate(got, 120))
+	}
+}
+
+func TestNewResolver_MergeSystemRuleKeepsRulePriority(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// Project rule file:
+	//   <repo>/.opencodereview/rule.json
+	// Custom rule file:
+	//   <custom>/custom_rules.json, passed as --rule equivalent.
+	// Path under test:
+	//   main.go -> matches custom main.go first, then project **/*.go.
+	// This verifies merging does not change layer priority: custom still wins.
+	repoDir := t.TempDir()
+	ocrDir := filepath.Join(repoDir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	projectRule := `{"rules":[{"path":"**/*.go","rule":"project-go-rule"}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(projectRule), 0o644); err != nil {
+		t.Fatalf("write rule.json: %v", err)
+	}
+
+	customDir := t.TempDir()
+	customRule := `{"rules":[{"path":"main.go","rule":"custom-main-rule","merge_system_rule":true}]}`
+	customPath := filepath.Join(customDir, "custom_rules.json")
+	if err := os.WriteFile(customPath, []byte(customRule), 0o644); err != nil {
+		t.Fatalf("write custom rule: %v", err)
+	}
+
+	resolver, _, err := NewResolver(repoDir, customPath)
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+
+	systemRule, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault: %v", err)
+	}
+	wantSystemRule := systemRule.Resolve("main.go")
+
+	got := resolver.Resolve("main.go")
+	if !strings.Contains(got, wantSystemRule) {
+		t.Fatalf("expected merged system rule, got %q", truncate(got, 120))
+	}
+	if !strings.Contains(got, "custom-main-rule") {
+		t.Fatalf("expected custom rule to win, got %q", truncate(got, 120))
+	}
+	if strings.Contains(got, "project-go-rule") {
+		t.Fatalf("project rule should not be merged when custom rule matches first, got %q", truncate(got, 120))
 	}
 }
 
@@ -610,6 +828,52 @@ func TestResolveDetail_ProjectOverridesSystem(t *testing.T) {
 	detail = dr.ResolveDetail("other/bar.java")
 	if detail.Source != "system" {
 		t.Errorf("expected source 'system', got %q", detail.Source)
+	}
+}
+
+func TestResolveDetail_MergeSystemRule(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	// Project rule file:
+	//   <repo>/.opencodereview/rule.json
+	// Path under test:
+	//   src/main/foo.java -> matches both the system Java rule and the project rule.
+	// This verifies ResolveDetail reports the matched user rule metadata while
+	// returning merged rule text when the entry sets merge_system_rule.
+	dir := t.TempDir()
+	ocrDir := filepath.Join(dir, ".opencodereview")
+	if err := os.MkdirAll(ocrDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	ruleJSON := `{"rules":[{"path":"src/**/*.java","rule":"project-java-rule","merge_system_rule":true}]}`
+	if err := os.WriteFile(filepath.Join(ocrDir, "rule.json"), []byte(ruleJSON), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	resolver, _, err := NewResolver(dir, "")
+	if err != nil {
+		t.Fatalf("NewResolver: %v", err)
+	}
+	dr := resolver.(DetailResolver)
+
+	systemRule, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault: %v", err)
+	}
+	wantSystemRule := systemRule.Resolve("src/main/foo.java")
+
+	detail := dr.ResolveDetail("src/main/foo.java")
+	if detail.Source != "project" {
+		t.Errorf("expected source 'project', got %q", detail.Source)
+	}
+	if detail.Pattern != "src/**/*.java" {
+		t.Errorf("expected pattern 'src/**/*.java', got %q", detail.Pattern)
+	}
+	if !strings.Contains(detail.Rule, wantSystemRule) {
+		t.Fatalf("expected merged system rule, got %q", truncate(detail.Rule, 120))
+	}
+	if !strings.Contains(detail.Rule, "project-java-rule") {
+		t.Fatalf("expected merged project rule, got %q", truncate(detail.Rule, 120))
 	}
 }
 

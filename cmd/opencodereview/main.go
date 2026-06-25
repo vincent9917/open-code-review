@@ -46,6 +46,8 @@ func dispatch() error {
 		return nil
 	case "review", "r":
 		return runReview(args[1:])
+	case "scan", "s":
+		return runScan(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "llm":
@@ -71,8 +73,9 @@ Usage:
   ocr [command]
 
 Commands:
-  review, r    Start a code review
+  review, r    Start a diff-based code review
   glab mr      Review a GitLab merge request via glab
+  scan, s      Scan entire files (no diff required)
   rules        Inspect and debug review rules
   config       Manage configuration settings
   llm          LLM utility commands
@@ -84,6 +87,8 @@ Examples:
   ocr review --commit abc123               Review a single commit
   ocr glab mr 123                          Review GitLab MR #123
   ocr glab mr                              Auto-detect MR from current branch
+  ocr scan                                 Scan every reviewable file in the repo
+  ocr scan --path internal/agent           Scan a single directory
   ocr config provider                      Interactive provider setup
   ocr config model                         Interactive model selection
   ocr config set llm.model opus-4-6        Set a config value
@@ -93,6 +98,7 @@ Examples:
 
 Use "ocr review -h" for more information about review.
 Use "ocr glab --help" for more information about GitLab MR review.
+Use "ocr scan -h" for more information about scan.
 Use "ocr rules -h" for more information about rules.
 Use "ocr config" for more information about config.
 Use "ocr llm" for more information about LLM utilities.
