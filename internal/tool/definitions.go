@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // Tool represents a single review tool.
@@ -26,7 +27,20 @@ func OfName(name string) Tool {
 			return t
 		}
 	}
-	return Unknown
+	if name == "" {
+		return Unknown
+	}
+	return OfDynamic(name)
+}
+
+// OfDynamic creates a Tool with a runtime-defined name, enabling
+// dynamically discovered tools (e.g., from MCP servers) to participate
+// in the tool dispatch flow.
+func OfDynamic(name string) Tool {
+	if name == "" {
+		panic(fmt.Sprintf("tool: OfDynamic called with empty name"))
+	}
+	return Tool{name: name}
 }
 
 func allTools() []Tool {
@@ -38,7 +52,7 @@ func (t Tool) Name() string { return t.name }
 
 // IsKnown reports whether the tool is not UNKNOWN.
 func (t Tool) IsKnown() bool {
-	return t != Unknown
+	return t.name != "" && t.name != "unknown"
 }
 
 // Provider is the interface that all concrete tool implementations satisfy.

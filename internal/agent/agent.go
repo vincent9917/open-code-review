@@ -16,6 +16,7 @@ import (
 	"github.com/open-code-review/open-code-review/internal/gitcmd"
 	"github.com/open-code-review/open-code-review/internal/llm"
 	"github.com/open-code-review/open-code-review/internal/llmloop"
+	"github.com/open-code-review/open-code-review/internal/mcp"
 	"github.com/open-code-review/open-code-review/internal/model"
 	"github.com/open-code-review/open-code-review/internal/session"
 	"github.com/open-code-review/open-code-review/internal/stdout"
@@ -807,4 +808,28 @@ func BuildToolDefs(entries []toolsconfig.ToolConfigEntry, planOnly bool) []llm.T
 		})
 	}
 	return defs
+}
+
+// MergeMCPToolDefs merges MCP-discovered tool definitions into the main-phase
+// tool list. MCP tools are not added to the plan phase because plan uses
+// reference-only text descriptions, not actual function calls.
+// Returns the merged plan/main defs and any server-provided usage instructions.
+func MergeMCPToolDefs(
+	planDefs []llm.ToolDef,
+	mainDefs []llm.ToolDef,
+	mcpTools []*mcp.MCPToolInfo,
+	instructions string,
+) ([]llm.ToolDef, []llm.ToolDef, string) {
+	for _, mt := range mcpTools {
+		td := llm.ToolDef{
+			Type: "function",
+			Function: llm.FunctionDef{
+				Name:        mt.ToolName,
+				Description: mt.Description,
+				Parameters:  mt.InputSchema,
+			},
+		}
+		mainDefs = append(mainDefs, td)
+	}
+	return planDefs, mainDefs, instructions
 }

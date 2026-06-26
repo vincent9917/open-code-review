@@ -30,3 +30,26 @@ func (b *BuiltinToolProvider) Tool() Tool { return b.tool }
 func (b *BuiltinToolProvider) Execute(ctx context.Context, args map[string]any) (string, error) {
 	return b.fn(ctx, args)
 }
+
+// MCPCaller abstracts the MCP manager for tool dispatch, avoiding a
+// circular import between the tool and mcp packages.
+type MCPCaller interface {
+	CallTool(ctx context.Context, name string, args map[string]any) (string, error)
+}
+
+// MCPToolProvider wraps an MCP-discovered tool as a standard Provider.
+type MCPToolProvider struct {
+	tool    Tool
+	manager MCPCaller
+}
+
+// NewMCPProvider creates a Provider that delegates to an MCP server.
+func NewMCPProvider(name string, manager MCPCaller) *MCPToolProvider {
+	return &MCPToolProvider{tool: OfDynamic(name), manager: manager}
+}
+
+func (p *MCPToolProvider) Tool() Tool { return p.tool }
+
+func (p *MCPToolProvider) Execute(ctx context.Context, args map[string]any) (string, error) {
+	return p.manager.CallTool(ctx, p.tool.Name(), args)
+}

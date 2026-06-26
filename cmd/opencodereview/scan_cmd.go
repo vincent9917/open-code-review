@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/open-code-review/open-code-review/internal/agent"
 	"github.com/open-code-review/open-code-review/internal/config/template"
 	"github.com/open-code-review/open-code-review/internal/llmloop"
 	"github.com/open-code-review/open-code-review/internal/scan"
@@ -178,6 +179,21 @@ func runScan(args []string) error {
 		Runner:  cc.GitRunner,
 	}
 	tools := buildToolRegistry(rt.Collector, fileReader)
+
+	// Load MCP server configuration and start servers (graceful degradation).
+	mcpMgr := setupMCPTools(context.Background(), tools)
+	if mcpMgr != nil {
+		defer mcpMgr.Shutdown()
+		var mcpInstructions string
+		_, scanToolDefs, mcpInstructions = agent.MergeMCPToolDefs(nil, scanToolDefs, mcpMgr.ListTools(), mcpMgr.Instructions())
+		if mcpInstructions != "" {
+			if opts.background != "" {
+				opts.background = mcpInstructions + "\n\n" + opts.background
+			} else {
+				opts.background = mcpInstructions
+			}
+		}
+	}
 
 	ag := scan.NewAgent(scan.Args{
 		RepoDir:               cc.RepoDir,

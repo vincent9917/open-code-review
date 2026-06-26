@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/open-code-review/open-code-review/internal/agent"
+	"github.com/open-code-review/open-code-review/internal/mcp"
+	"github.com/open-code-review/open-code-review/internal/stdout"
 	"github.com/open-code-review/open-code-review/internal/telemetry"
 	"github.com/open-code-review/open-code-review/internal/tool"
 )
@@ -60,6 +62,23 @@ func runReview(args []string) error {
 		Runner:  cc.GitRunner,
 	}
 	tools := buildToolRegistry(rt.Collector, fileReader)
+
+	// Load MCP server configuration and start servers (graceful degradation).
+	mcpMgr := setupMCPTools(context.Background(), tools)
+	if mcpMgr != nil {
+		defer mcpMgr.Shutdown()
+		var mcpInstructions string
+		rt.PlanToolDefs, rt.MainToolDefs, mcpInstructions = agent.MergeMCPToolDefs(
+			rt.PlanToolDefs, rt.MainToolDefs, mcpMgr.ListTools(), mcpMgr.Instructions(),
+		)
+		if mcpInstructions != "" {
+			if opts.background != "" {
+				opts.background = mcpInstructions + "\n\n" + opts.background
+			} else {
+				opts.background = mcpInstructions
+			}
+		}
+	}
 
 	ag := agent.New(agent.Args{
 		RepoDir:               cc.RepoDir,
@@ -188,4 +207,47 @@ func buildToolRegistry(collector *tool.CommentCollector, fr *tool.FileReader) *t
 	reg.Register(tool.NewCodeSearch(fr))
 	reg.Register(&tool.CodeCommentProvider{Collector: collector})
 	return reg
+}
+
+// setupMCPTools loads MCP server configuration, starts enabled servers,
+// discovers tools, and registers them in the tool registry. Returns nil
+// when no servers are configured or all servers fail to start.
+func setupMCPTools(ctx context.Context, reg *tool.Registry) *mcp.Manager {
+	mcpCfgPath, err := mcp.DefaultConfigPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] WARNING: Failed to get MCP config path: %v\n", err)
+		return nil
+	}
+
+	mcpCfg, err := mcp.LoadConfig(mcpCfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] WARNING: Failed to load MCP config: %v\n", err)
+		return nil
+	}
+	if len(mcpCfg.Servers) == 0 {
+		return nil
+	}
+
+	mgr := mcp.NewManager()
+	if err := mgr.StartServers(ctx, mcpCfg); err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] WARNING: MCP server startup errors: %v\n", err)
+	}
+
+	if err := mgr.DiscoverTools(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "[ocr] WARNING: MCP tool discovery errors: %v\n", err)
+	}
+
+	for _, mt := range mgr.ListTools() {
+		if _, exists := reg.Get(mt.ToolName); exists {
+			fmt.Fprintf(os.Stderr, "[ocr] WARNING: MCP tool %q conflicts with built-in tool, skipping\n", mt.ToolName)
+			continue
+		}
+		reg.Register(tool.NewMCPProvider(mt.ToolName, mgr))
+	}
+
+	if len(mgr.ListTools()) > 0 {
+		fmt.Fprintf(stdout.Writer(), "[ocr] MCP: registered %d tool(s) from configured servers\n", len(mgr.ListTools()))
+	}
+
+	return mgr
 }
