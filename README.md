@@ -24,6 +24,7 @@
   <a href="#supported-platforms"><img alt="Linux" src="https://img.shields.io/badge/Linux-supported-blue.svg" /></a>
   <a href="#supported-agents"><img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg" /></a>
   <a href="#supported-agents"><img alt="Codex" src="https://img.shields.io/badge/Codex-supported-blueviolet.svg" /></a>
+  <a href="#supported-agents"><img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-blueviolet.svg" /></a>
 </p>
 <p align="center">
   English | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja-JP.md">日本語</a> | <a href="README.ko-KR.md">한국어</a> | <a href="README.ru-RU.md">Русский</a>
@@ -162,6 +163,8 @@ sudo cp dist/opencodereview /usr/local/bin/ocr
 
 **You must configure an LLM before reviewing code.**
 
+OCR manages LLM configuration through a unified **Provider** system. It ships with many popular built-in providers and also supports adding custom providers to connect to private deployments or other compatible endpoints. Config is stored in `~/.opencodereview/config.json`.
+
 **Option A: Interactive setup (Recommended)**
 
 ```bash
@@ -171,26 +174,60 @@ ocr config model             # Pick a model for the active provider
 
 ![Provider setup](imgs/providers.jpg)
 
-**Option B: Manual config**
+The interactive UI guides you through provider selection, API key entry, and model configuration, then automatically tests connectivity.
+
+Run `ocr llm providers` to see all built-in providers. Built-in providers come with preset API URLs and protocols — just supply an API key to get started. If the corresponding environment variable is already set (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), the API key is picked up automatically.
+
+**Custom providers** can also be added through the interactive UI — you'll need to provide a name, API URL, protocol type (`anthropic` or `openai`), and API key.
+
+**Option B: CLI setup (for CI/CD and non-interactive environments)**
+
+Use `ocr config set` to write provider configuration directly, suitable for scripts and automation.
+
+Using a built-in provider:
 
 ```bash
-ocr config set llm.url https://api.anthropic.com/v1/messages
-ocr config set llm.auth_token your-api-key-here
-ocr config set llm.model claude-opus-4-6
-ocr config set llm.use_anthropic true
+ocr config set provider anthropic
+ocr config set providers.anthropic.api_key your-api-key-here
+ocr config set providers.anthropic.model claude-sonnet-4-6
 ```
 
-Config is stored in `~/.opencodereview/config.json`.
-
-**`auth_header` (optional):** Controls which HTTP header carries the API key when using Anthropic. Defaults to `authorization` (Bearer token) if omitted. If you use a standard `sk-ant-*` API key, you must set it to `x-api-key`:
+Using a custom provider (private gateway or other compatible endpoint):
 
 ```bash
-ocr config set llm.auth_header x-api-key
+ocr config set provider my-gateway
+ocr config set custom_providers.my-gateway.url https://my-llm-gateway.internal/v1
+ocr config set custom_providers.my-gateway.protocol openai
+ocr config set custom_providers.my-gateway.api_key your-api-key-here
+ocr config set custom_providers.my-gateway.model gpt-4o
 ```
 
-Supported values: `x-api-key`, `authorization` (alias: `bearer`). Other values are rejected with an error.
+> `url` and `protocol` are required for custom providers. Supported protocols: `anthropic`, `openai`.
 
-**Option C: Environment variables (highest priority)**
+Optional settings:
+
+| Key | Description |
+|-----|-------------|
+| `providers.<name>.auth_header` | Auth header: `x-api-key` or `authorization` (default: `authorization`) |
+| `providers.<name>.extra_body` | Custom JSON fields merged into the request body |
+| `providers.<name>.extra_headers` | Comma-separated `key=value` pairs of custom HTTP headers added to every request |
+| `providers.<name>.models` | Model list for interactive selection |
+
+**`extra_headers` (optional):** Adds custom HTTP headers to every LLM API request. Useful for proxies, gateways, or enterprise endpoints that require additional headers (e.g. organization IDs, tracing IDs). Format is comma-separated `key=value` pairs. Double-quote values that contain commas:
+
+```bash
+ocr config set llm.extra_headers "X-Org-ID=org-123,X-Forwarded-For=\"1.2.3.4,5.6.7.8\""
+```
+
+You can also set extra headers per-provider:
+
+```bash
+ocr config set providers.anthropic.extra_headers "X-Org-ID=org-123"
+```
+
+**Environment variables (highest priority)**
+
+Environment variables override config file settings, useful in CI/CD where writing config files is inconvenient:
 
 ```bash
 export OCR_LLM_URL=https://api.anthropic.com/v1/messages
@@ -199,14 +236,12 @@ export OCR_LLM_MODEL=claude-opus-4-6
 export OCR_USE_ANTHROPIC=true
 ```
 
-It is also compatible with Claude Code environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`) and parses `~/.zshrc` / `~/.bashrc` for those exports.
+Also compatible with Claude Code environment variables (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`) and parses `~/.zshrc` / `~/.bashrc` for those exports.
 
-> **Note for CC-Switch Users**: If you are using [CC-Switch](https://github.com/farion1231/cc-switch) with [routing service](https://www.ccswitch.io/en/docs?section=proxy&item=service) enabled, you can point `llm.url` to the CC-Switch proxy address without additional configuration:
-> - For **Claude** provider: set `llm.url` to `http://127.0.0.1:15721`
-> - For **Codex** provider: set `llm.url` to `http://127.0.0.1:15721/v1`
-> - Set `llm.model` according to your provider settings
-> - `llm.auth_token` can be any value
-> - `extra_body` settings still apply
+> **Note for CC-Switch Users**: If you are using [CC-Switch](https://github.com/farion1231/cc-switch) with [routing service](https://www.ccswitch.io/en/docs?section=proxy&item=service) enabled, you can point the provider's `url` to the CC-Switch proxy address without additional configuration:
+> - For **Claude** provider: set `providers.anthropic.url` to `http://127.0.0.1:15721`
+> - For **Codex** provider: set the corresponding provider's `url` to `http://127.0.0.1:15721/v1`
+> - `api_key` can be any value; `extra_body` settings still apply
 
 **2. Test Connectivity**
 
@@ -294,7 +329,39 @@ This integration does not change OCR's internal LLM backend and does not require
 
 Korean guide: [`plugins/open-code-review/CODEX.ko-KR.md`](plugins/open-code-review/CODEX.ko-KR.md)
 
-#### Option 4: Copy the Command File Directly
+#### Option 4: Install as a Cursor Plugin
+
+For [Cursor](https://www.cursor.com/), install the Open Code Review plugin from this repository:
+
+```
+cursor-plugin marketplace add alibaba/open-code-review
+```
+
+Or add the marketplace manually. In Cursor, open `/plugins`, search for `Open Code Review`, and install it.
+
+For a local checkout or fork:
+
+```
+cursor-plugin marketplace add .
+```
+
+After installation, invoke it in Cursor:
+
+```text
+@Open Code Review review my current changes
+@Open Code Review review this branch against main
+@Open Code Review review and fix high-confidence issues
+```
+
+This registers a Cursor skill that runs the local OCR CLI:
+
+```bash
+ocr review --audience agent
+```
+
+This integration does not change OCR's internal LLM backend. OCR itself still requires the `ocr` CLI to be installed and configured as described in the CLI setup section.
+
+#### Option 5: Copy the Command File Directly
 
 For a quick setup without any package manager, simply copy the command file to use the `/open-code-review` slash command in Claude Code.
 
@@ -589,10 +656,14 @@ Config file: `~/.opencodereview/config.json`
 | `providers.<name>.model` | string | Model name for the provider |
 | `providers.<name>.models` | array | Optional provider model list for interactive selection |
 | `providers.<name>.auth_header` | string | `x-api-key` \| `authorization` |
+| `providers.<name>.extra_body` | object | JSON object merged into every request body |
+| `providers.<name>.extra_headers` | string | Comma-separated `key=value` HTTP headers |
 | `custom_providers.<name>.*` | — | Same fields as `providers.<name>.*`, including optional `models` |
 | `llm.url` | string | `https://api.openai.com/v1/chat/completions` |
 | `llm.auth_token` | string | `sk-xxxxxxx` |
 | `llm.auth_header` | string | Anthropic only: `x-api-key` \| `authorization` |
+| `llm.extra_body` | object | JSON object merged into every request body |
+| `llm.extra_headers` | string | Comma-separated `key=value` HTTP headers |
 | `llm.model` | string | `claude-opus-4-6` |
 | `llm.use_anthropic` | boolean | `true` \| `false` |
 | `language` | string | Any language name, e.g. `English`, `Chinese` (default: `English`) |
@@ -610,6 +681,7 @@ Environment variables take precedence over the config file.
 | `OCR_LLM_URL` | LLM API endpoint URL |
 | `OCR_LLM_TOKEN` | API key / auth token |
 | `OCR_LLM_AUTH_HEADER` | Anthropic auth header (`x-api-key` or `authorization`) |
+| `OCR_LLM_EXTRA_HEADERS` | Comma-separated `key=value` HTTP headers |
 | `OCR_LLM_MODEL` | Model name |
 | `OCR_USE_ANTHROPIC` | `true` = Anthropic, `false` = OpenAI |
 

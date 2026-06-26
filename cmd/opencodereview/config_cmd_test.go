@@ -221,6 +221,83 @@ func TestSetConfigValueModelWithCustomProvider(t *testing.T) {
 	}
 }
 
+func TestSetConfigValueLlmExtraHeaders(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "llm.extra_headers", "X-Custom=val1, X-Org=val2"); err != nil {
+		t.Fatalf("setConfigValue: %v", err)
+	}
+
+	if cfg.Llm.ExtraHeaders == nil {
+		t.Fatal("ExtraHeaders should not be nil")
+	}
+	if v := cfg.Llm.ExtraHeaders["X-Custom"]; v != "val1" {
+		t.Errorf("ExtraHeaders[\"X-Custom\"] = %q, want %q", v, "val1")
+	}
+	if v := cfg.Llm.ExtraHeaders["X-Org"]; v != "val2" {
+		t.Errorf("ExtraHeaders[\"X-Org\"] = %q, want %q", v, "val2")
+	}
+}
+
+func TestSetConfigValueLlmExtraHeadersInvalid(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "llm.extra_headers", "no-equals-sign"); err == nil {
+		t.Fatal("expected error for invalid extra headers, got nil")
+	}
+}
+
+func TestSetConfigValueLlmExtraHeadersReservedRejected(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "llm.extra_headers", "Authorization=bad"); err == nil {
+		t.Fatal("expected error for reserved header, got nil")
+	}
+}
+
+func TestSetConfigValueProviderExtraHeaders(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "providers.anthropic.extra_headers", "X-Custom=val1, X-Org=val2"); err != nil {
+		t.Fatalf("setConfigValue: %v", err)
+	}
+
+	entry := cfg.Providers["anthropic"]
+	if entry.ExtraHeaders == nil {
+		t.Fatal("ExtraHeaders should not be nil")
+	}
+	if v := entry.ExtraHeaders["X-Custom"]; v != "val1" {
+		t.Errorf("ExtraHeaders[\"X-Custom\"] = %q, want %q", v, "val1")
+	}
+	if v := entry.ExtraHeaders["X-Org"]; v != "val2" {
+		t.Errorf("ExtraHeaders[\"X-Org\"] = %q, want %q", v, "val2")
+	}
+}
+
+func TestSetConfigValueProviderExtraHeadersInvalid(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "providers.anthropic.extra_headers", "=missing-key"); err == nil {
+		t.Fatal("expected error for invalid extra headers, got nil")
+	}
+}
+
+func TestSetConfigValueCustomProviderExtraHeaders(t *testing.T) {
+	cfg := &Config{}
+
+	if err := setConfigValue(cfg, "custom_providers.my-gateway.extra_headers", "X-Gateway=secret"); err != nil {
+		t.Fatalf("setConfigValue: %v", err)
+	}
+
+	entry := cfg.CustomProviders["my-gateway"]
+	if entry.ExtraHeaders == nil {
+		t.Fatal("ExtraHeaders should not be nil")
+	}
+	if v := entry.ExtraHeaders["X-Gateway"]; v != "secret" {
+		t.Errorf("ExtraHeaders[\"X-Gateway\"] = %q, want %q", v, "secret")
+	}
+}
+
 // --- unset tests ---
 
 func TestParseConfigArgsUnset(t *testing.T) {
@@ -337,5 +414,25 @@ func TestUnsetInvalidKey(t *testing.T) {
 				t.Errorf("unsetCustomProvider(%q): err=%v, wantErr=%v", tt.name, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestEnsureModelInList(t *testing.T) {
+	models := []string{"test-model", "test-model-2", "bbb", "aaa", "test-model-3"}
+
+	got := ensureModelInList(models, "test-model-3")
+	if len(got) != len(models) {
+		t.Fatalf("existing model should not reorder: got %v", got)
+	}
+	for i := range models {
+		if got[i] != models[i] {
+			t.Errorf("models[%d] = %q, want %q", i, got[i], models[i])
+		}
+	}
+
+	got = ensureModelInList(models, "new-model")
+	want := append(append([]string(nil), models...), "new-model")
+	if len(got) != len(want) || got[len(got)-1] != "new-model" {
+		t.Errorf("new model should append: got %v, want %v", got, want)
 	}
 }

@@ -1,4 +1,5 @@
 import { CliResult, CommentStatus, FileChange, GitState, LogLine, OcrConfig, ReviewMode, ReviewState } from '../shared/types';
+import { SupportedLocale } from '../shared/i18n';
 import { HostToWebview } from '../shared/messages';
 
 export type AppView = 'idle' | 'running' | 'done' | 'empty' | 'cancelled' | 'failed';
@@ -13,6 +14,7 @@ export interface AppState {
   session: { state: ReviewState; result: CliResult | null; error?: string };
   commentStatus: Record<number, CommentStatus>;
   reviewMode: ReviewMode;
+  locale: SupportedLocale;
 }
 
 export const initialState: AppState = {
@@ -25,6 +27,7 @@ export const initialState: AppState = {
   session: { state: 'idle', result: null },
   commentStatus: {},
   reviewMode: 'workspace',
+  locale: 'en',
 };
 
 const STATE_TO_VIEW: Record<ReviewState, AppView> = {
@@ -49,6 +52,7 @@ export function reducer(state: AppState, msg: HostToWebview | LocalAction): AppS
         gitState: msg.gitState,
         view: 'idle',
         filesLoading: false,
+        locale: msg.locale,
       };
     case 'gitState':
       return { ...state, gitState: msg.gitState, filesLoading: false };

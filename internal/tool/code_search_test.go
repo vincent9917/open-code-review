@@ -16,6 +16,7 @@ func TestBuildGrepArgs_WorkspaceMode(t *testing.T) {
 
 	assertContainsInOrder(t, args, "-e", "myFunc", "--")
 	assertContains(t, args, "-i")
+	assertContains(t, args, "--untracked")
 	if idx := slices.Index(args, "--"); idx >= 0 {
 		for i := 0; i < idx; i++ {
 			if args[i] == "myFunc" && (i == 0 || args[i-1] != "-e") {
@@ -30,6 +31,7 @@ func TestBuildGrepArgs_CommitMode(t *testing.T) {
 	args := p.buildGrepArgs("myFunc", false, false, false, []string{"pkg/"})
 
 	assertContainsInOrder(t, args, "-e", "myFunc", "--end-of-options", "abc1234", "--", "pkg/")
+	assertNotContains(t, args, "--untracked")
 }
 
 func TestBuildGrepArgs_RefUsesEndOfOptions(t *testing.T) {
@@ -304,6 +306,26 @@ func assertContainsInOrder(t *testing.T, args []string, vals ...string) {
 	}
 	if idx != len(vals) {
 		t.Errorf("expected args to contain %v in order, got %v (matched up to index %d)", vals, args, idx)
+	}
+}
+
+func TestGitGrep_WorkspaceMode_UntrackedFile(t *testing.T) {
+	dir := setupTestRepo(t)
+	untrackedDir := filepath.Join(dir, "newpkg")
+	if err := os.MkdirAll(untrackedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(untrackedDir, "untracked.go"), []byte("package newpkg\n\nfunc UntrackedFunc() {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := NewCodeSearch(&FileReader{RepoDir: dir, Ref: "", Mode: ModeWorkspace})
+	result, err := p.gitGrep(context.Background(), "UntrackedFunc", false, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result, "untracked.go") {
+		t.Errorf("expected untracked.go in result, got: %s", result)
 	}
 }
 

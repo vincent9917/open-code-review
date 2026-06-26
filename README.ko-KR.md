@@ -24,6 +24,7 @@
   <a href="#supported-platforms"><img alt="Linux" src="https://img.shields.io/badge/Linux-supported-blue.svg" /></a>
   <a href="#supported-agents"><img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg" /></a>
   <a href="#supported-agents"><img alt="Codex" src="https://img.shields.io/badge/Codex-supported-blueviolet.svg" /></a>
+  <a href="#supported-agents"><img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-blueviolet.svg" /></a>
 </p>
 <p align="center">
   <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja-JP.md">日本語</a> | 한국어 | <a href="README.ru-RU.md">Русский</a>
@@ -162,6 +163,8 @@ sudo cp dist/opencodereview /usr/local/bin/ocr
 
 **코드 리뷰를 실행하기 전에 반드시 LLM을 설정해야 합니다.**
 
+OCR은 통합 **Provider** 시스템으로 LLM 설정을 관리합니다. 다양한 주요 provider가 내장되어 있으며, 프라이빗 배포 또는 기타 호환 엔드포인트에 연결하기 위한 커스텀 provider 추가도 지원합니다. 설정은 `~/.opencodereview/config.json`에 저장됩니다.
+
 **Option A: 대화형 설정 (권장)**
 
 ```bash
@@ -171,26 +174,60 @@ ocr config model             # 활성 provider의 model 선택
 
 ![Provider setup](imgs/providers.jpg)
 
-**Option B: 수동 설정**
+대화형 UI가 provider 선택, API key 입력, model 설정을 안내하며, 완료 후 자동으로 연결 테스트를 수행합니다.
+
+`ocr llm providers`를 실행하면 모든 built-in provider를 확인할 수 있습니다. Built-in provider에는 API URL과 프로토콜이 사전 설정되어 있어 API key만 제공하면 바로 사용할 수 있습니다. 해당 환경 변수(예: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)가 이미 설정되어 있으면 API key가 자동으로 읽힙니다.
+
+**커스텀 provider**도 대화형 UI에서 추가할 수 있습니다 — provider 이름, API URL, 프로토콜 타입(`anthropic` 또는 `openai`), API key를 입력합니다.
+
+**Option B: CLI 설정 (CI/CD 등 비대화형 환경용)**
+
+`ocr config set` 명령으로 provider 설정을 직접 작성합니다. 스크립트 및 자동화에 적합합니다.
+
+Built-in provider 사용:
 
 ```bash
-ocr config set llm.url https://api.anthropic.com/v1/messages
-ocr config set llm.auth_token your-api-key-here
-ocr config set llm.model claude-opus-4-6
-ocr config set llm.use_anthropic true
+ocr config set provider anthropic
+ocr config set providers.anthropic.api_key your-api-key-here
+ocr config set providers.anthropic.model claude-sonnet-4-6
 ```
 
-config는 `~/.opencodereview/config.json`에 저장됩니다.
-
-**`auth_header` (선택사항):** Anthropic 사용 시 API key를 전송할 HTTP header를 제어합니다. 생략하면 기본값은 `authorization` (Bearer token)입니다. 표준 `sk-ant-*` API key를 사용하는 경우 `x-api-key`로 설정해야 합니다:
+커스텀 provider 사용 (프라이빗 게이트웨이 또는 기타 호환 엔드포인트):
 
 ```bash
-ocr config set llm.auth_header x-api-key
+ocr config set provider my-gateway
+ocr config set custom_providers.my-gateway.url https://my-llm-gateway.internal/v1
+ocr config set custom_providers.my-gateway.protocol openai
+ocr config set custom_providers.my-gateway.api_key your-api-key-here
+ocr config set custom_providers.my-gateway.model gpt-4o
 ```
 
-지원되는 값: `x-api-key`, `authorization` (별칭: `bearer`). 그 외 값은 오류로 처리됩니다.
+> 커스텀 provider에서는 `url`과 `protocol`이 필수입니다. 지원 프로토콜: `anthropic`, `openai`.
 
-**Option C: 환경 변수(가장 높은 우선순위)**
+선택 설정:
+
+| 키 | 설명 |
+|----|------|
+| `providers.<name>.auth_header` | 인증 header: `x-api-key` 또는 `authorization` (기본값: `authorization`) |
+| `providers.<name>.extra_body` | 요청 body에 병합되는 커스텀 JSON 필드 |
+| `providers.<name>.extra_headers` | 쉼표로 구분된 `key=value` 쌍, 각 요청에 추가되는 커스텀 HTTP 헤더 |
+| `providers.<name>.models` | 대화형 선택용 model 목록 |
+
+**`extra_headers` (선택사항):** 모든 LLM API 요청에 커스텀 HTTP 헤더를 추가합니다. 프록시, 게이트웨이, 추가 헤더가 필요한 엔터프라이즈 엔드포인트(조직 ID, 트레이싱 ID 등)에 유용합니다. 형식은 쉼표로 구분된 `key=value` 쌍입니다. 쉼표가 포함된 값은 큰따옴표로 묶으세요:
+
+```bash
+ocr config set llm.extra_headers "X-Org-ID=org-123,X-Forwarded-For=\"1.2.3.4,5.6.7.8\""
+```
+
+provider 별로 추가 헤더를 설정할 수도 있습니다:
+
+```bash
+ocr config set providers.anthropic.extra_headers "X-Org-ID=org-123"
+```
+
+**환경 변수 (가장 높은 우선순위)**
+
+환경 변수는 설정 파일의 값을 덮어씁니다. 설정 파일 작성이 불편한 CI/CD 시나리오에 적합합니다:
 
 ```bash
 export OCR_LLM_URL=https://api.anthropic.com/v1/messages
@@ -201,12 +238,10 @@ export OCR_USE_ANTHROPIC=true
 
 Claude Code 환경 변수(`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL`)와도 호환되며, `~/.zshrc` / `~/.bashrc`의 export도 파싱합니다.
 
-> **CC-Switch 사용자 참고**: [CC-Switch](https://github.com/farion1231/cc-switch)를 [routing service](https://www.ccswitch.io/en/docs?section=proxy&item=service)와 함께 사용한다면, 추가 설정 없이 `llm.url`을 CC-Switch proxy 주소로 지정할 수 있습니다.
-> - **Claude** provider: `llm.url`을 `http://127.0.0.1:15721`로 설정
-> - **Codex** provider: `llm.url`을 `http://127.0.0.1:15721/v1`로 설정
-> - provider 설정에 맞게 `llm.model` 설정
-> - `llm.auth_token`은 아무 값이나 사용할 수 있음
-> - `extra_body` 설정은 그대로 적용됨
+> **CC-Switch 사용자 참고**: [CC-Switch](https://github.com/farion1231/cc-switch)를 [routing service](https://www.ccswitch.io/en/docs?section=proxy&item=service)와 함께 사용한다면, provider의 `url`을 CC-Switch proxy 주소로 지정하여 추가 설정 없이 사용할 수 있습니다:
+> - **Claude** provider: `providers.anthropic.url`을 `http://127.0.0.1:15721`로 설정
+> - **Codex** provider: 해당 provider의 `url`을 `http://127.0.0.1:15721/v1`로 설정
+> - `api_key`는 아무 값이나 사용 가능, `extra_body` 설정은 그대로 적용됨
 
 **2. 연결 테스트**
 
@@ -294,7 +329,39 @@ ocr review --audience agent
 
 한국어 가이드: [`plugins/open-code-review/CODEX.ko-KR.md`](plugins/open-code-review/CODEX.ko-KR.md)
 
-#### Option 4: Command 파일 직접 복사
+#### Option 4: Cursor Plugin으로 설치
+
+[Cursor](https://www.cursor.com/)에서는 이 repository에서 Open Code Review plugin을 설치합니다:
+
+```
+cursor-plugin marketplace add alibaba/open-code-review
+```
+
+수동으로 marketplace를 추가할 수도 있습니다. Cursor에서 `/plugins`를 열고 `Open Code Review`를 검색하여 설치합니다.
+
+local checkout이나 fork에서는 다음을 사용할 수 있습니다:
+
+```
+cursor-plugin marketplace add .
+```
+
+설치 후, Cursor에서 다음과 같이 호출합니다:
+
+```text
+@Open Code Review review my current changes
+@Open Code Review review this branch against main
+@Open Code Review review and fix high-confidence issues
+```
+
+이 plugin은 local OCR CLI를 실행하는 Cursor skill을 등록합니다:
+
+```bash
+ocr review --audience agent
+```
+
+이 통합은 OCR의 내부 LLM backend를 변경하지 않습니다. OCR 자체는 CLI 설정 섹션에 설명된 대로 `ocr` CLI 설치와 설정이 필요합니다.
+
+#### Option 5: Command 파일 직접 복사
 
 package manager 없이 빠르게 설정하려면 command 파일을 복사해 Claude Code에서 `/open-code-review` slash command를 사용할 수 있습니다.
 
@@ -511,10 +578,14 @@ Config file: `~/.opencodereview/config.json`
 | `providers.<name>.model` | string | Provider의 model 이름 |
 | `providers.<name>.models` | array | 대화형 선택에 사용할 optional provider model 목록 |
 | `providers.<name>.auth_header` | string | `x-api-key` \| `authorization` |
+| `providers.<name>.extra_body` | object | 모든 요청 본문에 병합되는 JSON 객체 |
+| `providers.<name>.extra_headers` | string | 쉼표로 구분된 `key=value` HTTP 헤더 |
 | `custom_providers.<name>.*` | — | optional `models`를 포함한 `providers.<name>.*`과 동일한 필드 |
 | `llm.url` | string | `https://api.openai.com/v1/chat/completions` |
 | `llm.auth_token` | string | `sk-xxxxxxx` |
 | `llm.auth_header` | string | Anthropic only: `x-api-key` \| `authorization` |
+| `llm.extra_body` | object | 모든 요청 본문에 병합되는 JSON 객체 |
+| `llm.extra_headers` | string | 쉼표로 구분된 `key=value` HTTP 헤더 |
 | `llm.model` | string | `claude-opus-4-6` |
 | `llm.use_anthropic` | boolean | `true` \| `false` |
 | `language` | string | 임의의 언어 이름, 예: `English`, `Chinese` (기본값: `English`) |
@@ -532,6 +603,7 @@ Config file: `~/.opencodereview/config.json`
 | `OCR_LLM_URL` | LLM API endpoint URL |
 | `OCR_LLM_TOKEN` | API key / auth token |
 | `OCR_LLM_AUTH_HEADER` | Anthropic auth header (`x-api-key` 또는 `authorization`) |
+| `OCR_LLM_EXTRA_HEADERS` | 쉼표로 구분된 `key=value` HTTP 헤더 |
 | `OCR_LLM_MODEL` | Model name |
 | `OCR_USE_ANTHROPIC` | `true` = Anthropic, `false` = OpenAI |
 

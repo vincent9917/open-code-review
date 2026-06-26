@@ -1,3 +1,4 @@
+import { useT } from '../I18nProvider';
 import { useState } from 'preact/hooks';
 
 interface Props {
@@ -29,6 +30,7 @@ function EyeOffIcon() {
 
 export function PasswordInput({ value, placeholder, className, onInput }: Props) {
   const [visible, setVisible] = useState(false);
+  const t = useT();
 
   return (
     <div class="password-input-wrap">
@@ -43,7 +45,7 @@ export function PasswordInput({ value, placeholder, className, onInput }: Props)
         type="button"
         class="password-toggle"
         onClick={() => setVisible(!visible)}
-        aria-label={visible ? '隐藏密钥' : '显示密钥'}
+        aria-label={visible ? t('cmp.password.hideSecret') : t('cmp.password.showSecret')}
         tabIndex={-1}
       >
         {visible ? <EyeOffIcon /> : <EyeIcon />}

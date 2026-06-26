@@ -1,3 +1,4 @@
+import { resolveLocale, toHtmlLang } from '../../shared/i18n';
 import * as vscode from 'vscode';
 import { ConfigPanelFocus } from '../../shared/configUtils';
 import { HostToWebview, WebviewToHost } from '../../shared/messages';
@@ -48,7 +49,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       case 'ready': {
         const config = this.config.read();
         const gitState = await this.git.getState('workspace');
-        this.post({ type: 'init', config, gitState });
+        const locale = resolveLocale(vscode.env.language);
+        this.post({ type: 'init', config, gitState, locale });
         break;
       }
       case 'getGitState': {
@@ -108,8 +110,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private html(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview.js'));
     const nonce = String(Date.now());
+    const resolved = resolveLocale(vscode.env.language);
+    const lang = toHtmlLang(resolved);
     return `<!DOCTYPE html>
-<html lang="zh-CN"><head>
+<html lang="${lang}"><head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 </head><body><div id="root"></div>

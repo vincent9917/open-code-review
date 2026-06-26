@@ -1,6 +1,7 @@
 import { EnvCheckResult, LogLine } from '../../shared/types';
 import { CliStatus } from '../configStore';
 import { LogViewer } from './LogViewer';
+import { useT } from '../I18nProvider';
 
 export const OCR_INSTALL_CMD = 'npm install -g @alibaba-group/open-code-review';
 
@@ -40,12 +41,13 @@ export function EnvSetupGuide({
   layout, cliStatus, envCheck, skipEnvCheck = false, installing, installLogs,
   onInstall, onCheckEnv, onCopy, onNext,
 }: Props) {
+  const t = useT();
   const checking = cliStatus === 'checking' || cliStatus === 'unknown';
 
   if (installing) {
     return (
       <div class="wizard-body">
-        <EnvCheckingBanner label="正在安装 ocr CLI…" />
+        <EnvCheckingBanner label={t('view.env.installing')} />
         <LogViewer logs={installLogs} />
       </div>
     );
@@ -54,7 +56,7 @@ export function EnvSetupGuide({
   if (checking) {
     return (
       <div class="wizard-body">
-        <EnvCheckingBanner label="正在检测，请稍候…" />
+        <EnvCheckingBanner label={t('view.env.checking')} />
         <EnvChecklist checking />
       </div>
     );
@@ -66,7 +68,7 @@ export function EnvSetupGuide({
         <EnvChecklist env={envCheck} />
         <div class={`form-footer${layout === 'panel' ? ' page-footer' : ''}`}>
           <div class={`form-actions${layout === 'panel' ? ' panel-actions' : ''}`}>
-            <button type="button" class="btn-primary" onClick={onNext}>继续配置 Provider</button>
+            <button type="button" class="btn-primary" onClick={onNext}>{t('view.config.continueProvider')}</button>
           </div>
         </div>
       </div>
@@ -76,10 +78,10 @@ export function EnvSetupGuide({
   if (cliStatus === 'installed' && skipEnvCheck) {
     return (
       <div class="wizard-body">
-        <p class="env-guide-lead">环境已就绪，可继续配置 Provider。</p>
+        <p class="env-guide-lead">{t('view.env.ready')}</p>
         <div class={`form-footer${layout === 'panel' ? ' page-footer' : ''}`}>
           <div class={`form-actions${layout === 'panel' ? ' panel-actions' : ''}`}>
-            <button type="button" class="btn-primary" onClick={onNext}>继续配置 Provider</button>
+            <button type="button" class="btn-primary" onClick={onNext}>{t('view.config.continueProvider')}</button>
           </div>
         </div>
       </div>
@@ -92,7 +94,7 @@ export function EnvSetupGuide({
 
   return (
     <div class="wizard-body">
-      <p class="env-guide-lead">按顺序完成环境准备，通过一项后再进行下一项。</p>
+      <p class="env-guide-lead">{t('view.env.stepLead')}</p>
 
       <div class="env-timeline">
         <EnvTimelineItem
@@ -100,21 +102,21 @@ export function EnvSetupGuide({
           state={resolveStepState(nodeActive, false, envCheck?.node.ok)}
           version={envCheck?.node.version}
           command="node --version"
-          hint="未检测到 Node.js。请前往 nodejs.org 安装 LTS 版本，完成后重启 VS Code。"
+          hint={t('view.env.nodeHint')}
         />
         <EnvTimelineItem
           title="npm"
           state={resolveStepState(npmActive, false, envCheck?.npm.ok)}
           version={envCheck?.npm.version}
           command="npm --version"
-          hint="未检测到 npm。npm 通常随 Node 一起安装，请确认 Node 安装完整。"
+          hint={t('view.env.npmHint')}
         />
         <EnvTimelineItem
           title="ocr CLI"
           state={resolveStepState(ocrActive, false, envCheck?.ocr.ok)}
           version={envCheck?.ocr.version}
           command={OCR_INSTALL_CMD}
-          hint="在终端全局安装 open-code-review，或点击下方「一键安装」。"
+          hint={t('view.env.ocrHint')}
           onCopy={onCopy}
           last
         />
@@ -124,9 +126,9 @@ export function EnvSetupGuide({
 
       <div class={`form-footer${layout === 'panel' ? ' page-footer' : ''}`}>
         <div class={`form-actions${layout === 'panel' ? ' panel-actions' : ''}`}>
-          <button type="button" class="btn-default" onClick={onCheckEnv}>重新检测</button>
+          <button type="button" class="btn-default" onClick={onCheckEnv}>{t('view.env.redetect')}</button>
           {ocrActive && !envCheck?.ocr.ok && (
-            <button type="button" class="btn-primary" onClick={onInstall}>一键安装</button>
+            <button type="button" class="btn-primary" onClick={onInstall}>{t('view.env.oneClickInstall')}</button>
           )}
         </div>
       </div>
@@ -144,6 +146,7 @@ function EnvCheckingBanner({ label }: { label: string }) {
 }
 
 function EnvChecklist({ checking, env }: { checking?: boolean; env?: EnvCheckResult }) {
+  const t = useT();
   return (
     <ul class={`env-checklist${checking ? ' is-checking' : ''}${env ? ' is-done' : ''}`}>
       {CHECK_ITEMS.map(({ key, label }, i) => {
@@ -155,9 +158,9 @@ function EnvChecklist({ checking, env }: { checking?: boolean; env?: EnvCheckRes
             <span class="env-checklist-marker" aria-hidden="true" />
             <span class="env-checklist-label">{label}</span>
             <span class="env-checklist-meta">
-              {checking && '检测中'}
-              {!checking && ok && (item?.version ?? '就绪')}
-              {!checking && env && !ok && '未就绪'}
+              {checking && t('view.env.checkingStatus')}
+              {!checking && ok && (item?.version ?? t('view.env.readyStatus'))}
+              {!checking && env && !ok && t('view.env.notReady')}
             </span>
           </li>
         );
@@ -177,6 +180,7 @@ function EnvTimelineItem({
   onCopy?: (text: string) => void;
   last?: boolean;
 }) {
+  const t = useT();
   const showDetail = state === 'fail' || state === 'ok';
   return (
     <div class={`env-timeline-item ${state}${last ? ' last' : ''}`}>
@@ -188,10 +192,10 @@ function EnvTimelineItem({
         <div class="env-timeline-head">
           <span class="env-timeline-title">{title}</span>
           <span class={`env-timeline-status ${state}`}>
-            {state === 'ok' && (version ?? '通过')}
-            {state === 'fail' && '未通过'}
-            {state === 'pending' && '等待上一步'}
-            {state === 'checking' && '检测中'}
+            {state === 'ok' && (version ?? t('view.env.pass'))}
+            {state === 'fail' && t('view.env.fail')}
+            {state === 'pending' && t('view.env.waitPrev')}
+            {state === 'checking' && t('view.env.checkingStatus')}
           </span>
         </div>
         {showDetail && (
@@ -200,7 +204,7 @@ function EnvTimelineItem({
             <div class="env-cmd-block">
               <code>{command}</code>
               {onCopy && (
-                <button type="button" class="env-cmd-copy" onClick={() => onCopy(command)}>复制</button>
+                <button type="button" class="env-cmd-copy" onClick={() => onCopy(command)}>{t('view.env.copy')}</button>
               )}
             </div>
           </div>

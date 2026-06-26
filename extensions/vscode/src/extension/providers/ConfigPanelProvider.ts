@@ -1,3 +1,4 @@
+import { resolveLocale, t, toHtmlLang } from '../../shared/i18n';
 import * as vscode from 'vscode';
 import { ConfigPanelFocus, isConfigReady } from '../../shared/configUtils';
 import { ConfigPanelHostToWebview, WebviewToHost } from '../../shared/messages';
@@ -30,7 +31,7 @@ export class ConfigPanelProvider implements vscode.Disposable {
 
     this.panel = vscode.window.createWebviewPanel(
       PANEL_VIEW_TYPE,
-      '模型配置',
+      t(resolveLocale(vscode.env.language), 'ext.configPanelTitle'),
       vscode.ViewColumn.One,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [this.extensionUri] },
     );
@@ -80,12 +81,14 @@ export class ConfigPanelProvider implements vscode.Disposable {
         const config = this.config.read();
         const cached = this.cli.getCachedEnvironment();
         const skipEnvCheck = focus?.step === 2 || isConfigReady(config);
+        const locale = resolveLocale(vscode.env.language);
         this.post({
           type: 'configPanelInit',
           config,
           focus: focus ?? null,
           env: cached,
           skipEnvCheck,
+          locale,
         });
         break;
       }
@@ -106,12 +109,13 @@ export class ConfigPanelProvider implements vscode.Disposable {
         break;
       }
       case 'deleteCustomProvider': {
+        const locale = resolveLocale(vscode.env.language);
         const confirmed = await vscode.window.showWarningMessage(
-          `确定删除自定义 Provider「${msg.name}」？`,
+          t(locale, 'ext.deleteProviderConfirm').replace('{name}', msg.name),
           { modal: true },
-          '删除',
+          t(locale, 'ext.deleteProviderConfirmBtn'),
         );
-        if (confirmed !== '删除') break;
+        if (confirmed !== t(locale, 'ext.deleteProviderConfirmBtn')) break;
         this.notifyConfig(this.config.deleteCustomProvider(msg.name));
         break;
       }
@@ -144,8 +148,10 @@ export class ConfigPanelProvider implements vscode.Disposable {
   private html(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'configPanel.js'));
     const nonce = String(Date.now());
+    const resolved = resolveLocale(vscode.env.language);
+    const lang = toHtmlLang(resolved);
     return `<!DOCTYPE html>
-<html lang="zh-CN"><head>
+<html lang="${lang}"><head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 </head><body><div id="root"></div>

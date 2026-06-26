@@ -1,3 +1,4 @@
+import { I18nContext, resolveLocale } from './I18nProvider';
 import { useEffect, useReducer } from 'preact/hooks';
 import { reducer, initialState } from './store';
 import { bridge } from './bridge';
@@ -38,32 +39,34 @@ export function App() {
   };
 
   return (
-    <div class="ocr-root">
-      <div class="action-region">
-        <IdleView gitState={state.gitState} modeFiles={state.modeFiles} filesLoading={state.filesLoading}
-          configured={configured} onModeChange={onModeChange} onRequestModeFiles={requestModeFiles}
-          onOpenFile={openFile} onStart={start} onOpenConfig={() => bridge.post({ type: 'openConfigPanel' })}
-          onOpenCustomProviders={() => bridge.post({
-            type: 'openConfigPanel',
-            focus: { step: 2, tab: 'custom', customView: 'list' },
-          })}
-          running={state.view === 'running'} />
+    <I18nContext.Provider value={resolveLocale(state.locale)}>
+      <div class="ocr-root">
+        <div class="action-region">
+          <IdleView gitState={state.gitState} modeFiles={state.modeFiles} filesLoading={state.filesLoading}
+            configured={configured} onModeChange={onModeChange} onRequestModeFiles={requestModeFiles}
+            onOpenFile={openFile} onStart={start} onOpenConfig={() => bridge.post({ type: 'openConfigPanel' })}
+            onOpenCustomProviders={() => bridge.post({
+              type: 'openConfigPanel',
+              focus: { step: 2, tab: 'custom', customView: 'list' },
+            })}
+            running={state.view === 'running'} />
 
-        {state.view !== 'idle' && (
-          <div class="result-region">
-            {state.view === 'running' && <RunningView logs={state.logs} onCancel={() => bridge.post({ type: 'cancelReview' })} />}
-            {state.view === 'done' && state.session.result && (
-              <DoneView result={state.session.result} commentStatus={state.commentStatus} logs={state.logs}
-                canJump={state.reviewMode === 'workspace'}
-                onOpen={(i) => bridge.post({ type: 'jumpToComment', index: i })}
-                onAction={(i, action) => bridge.post({ type: 'commentAction', index: i, action })} />
-            )}
-            {state.view === 'empty' && <EmptyView logs={state.logs} />}
-            {state.view === 'cancelled' && <CancelledView />}
-            {state.view === 'failed' && <FailedView error={state.session.error} onRetry={() => start({ mode: 'workspace' })} />}
-          </div>
-        )}
+          {state.view !== 'idle' && (
+            <div class="result-region">
+              {state.view === 'running' && <RunningView logs={state.logs} onCancel={() => bridge.post({ type: 'cancelReview' })} />}
+              {state.view === 'done' && state.session.result && (
+                <DoneView result={state.session.result} commentStatus={state.commentStatus} logs={state.logs}
+                  canJump={state.reviewMode === 'workspace'}
+                  onOpen={(i) => bridge.post({ type: 'jumpToComment', index: i })}
+                  onAction={(i, action) => bridge.post({ type: 'commentAction', index: i, action })} />
+              )}
+              {state.view === 'empty' && <EmptyView logs={state.logs} />}
+              {state.view === 'cancelled' && <CancelledView />}
+              {state.view === 'failed' && <FailedView error={state.session.error} onRetry={() => start({ mode: 'workspace' })} />}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </I18nContext.Provider>
   );
 }

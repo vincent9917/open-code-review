@@ -6,9 +6,9 @@ import { EnvCheckResult, LogLine, OcrConfig } from '../../shared/types';
 import { CliStatus, ConnTest } from '../configStore';
 import { CustomProviderManager } from '../components/CustomProviderManager';
 import { EnvSetupGuide } from '../components/EnvSetupGuide';
-import { LogViewer } from '../components/LogViewer';
 import { PasswordInput } from '../components/PasswordInput';
 import { Select } from '../components/Select';
+import { useT } from '../I18nProvider';
 
 interface Props {
   layout?: 'modal' | 'panel';
@@ -71,15 +71,16 @@ export function ConfigView({
   }, [panelFocus, config, onClearConnTest]);
 
   const wide = layout === 'panel';
+  const t = useT();
   const stepper = (
     <div class="config-stepper">
       <div class={`config-step-pill${step === 1 ? ' active' : ''}${cliStatus === 'installed' ? ' done' : ''}`}>
         <span class="config-step-num">1</span>
-        <span>环境检测</span>
+        <span>{t('view.config.step1')}</span>
       </div>
       <div class={`config-step-pill${step === 2 ? ' active' : ''}`}>
         <span class="config-step-num">2</span>
-        <span>Provider 配置</span>
+        <span>{t('view.config.step2')}</span>
       </div>
     </div>
   );
@@ -129,8 +130,8 @@ export function ConfigView({
         <header class="config-page-header">
           <div class="config-page-header-row">
             <div>
-              <h1 class="config-page-title">模型配置</h1>
-              <p class="config-page-desc">连接 LLM Provider 以开始代码审查</p>
+              <h1 class="config-page-title">{t('view.config.title')}</h1>
+              <p class="config-page-desc">{t('view.config.desc')}</p>
             </div>
             <OcrVersionMeta envCheck={envCheck} cliStatus={cliStatus} />
           </div>
@@ -147,10 +148,10 @@ export function ConfigView({
     <>
       <div class="config-form-header">
         <div class="config-form-heading">
-          <span class="config-form-title">模型配置</span>
-          <span class="config-form-subtitle">连接 LLM Provider 以开始代码审查</span>
+          <span class="config-form-title">{t('view.config.title')}</span>
+          <span class="config-form-subtitle">{t('view.config.desc')}</span>
         </div>
-        <button type="button" class="config-list-close" onClick={onClose} aria-label="关闭">×</button>
+        <button type="button" class="config-list-close" onClick={onClose} aria-label={t('view.config.close')}>×</button>
       </div>
       {stepper}
       {stepContent}
@@ -167,16 +168,17 @@ export function ConfigView({
 }
 
 function OcrVersionMeta({ envCheck, cliStatus }: { envCheck: EnvCheckResult | null; cliStatus: CliStatus }) {
-  let label = 'ocr 检测中…';
+  const t = useT();
+  let label = t('view.config.checking');
   if (envCheck?.ocr.ok && envCheck.ocr.version) {
     label = envCheck.ocr.version.startsWith('v') ? envCheck.ocr.version : `v${envCheck.ocr.version}`;
   } else if (envCheck && !envCheck.ocr.ok) {
-    label = 'ocr 未安装';
+    label = t('view.config.notInstalled');
   } else if (cliStatus !== 'checking' && cliStatus === 'missing') {
-    label = 'ocr 未安装';
+    label = t('view.config.notInstalled');
   }
   return (
-    <div class="config-page-meta" title="Open Code Review CLI 版本">
+    <div class="config-page-meta" title={t('view.config.ocrVersionTooltip')}>
       <span class="config-page-meta-label">OCR</span>
       <span class="config-page-meta-value">{label}</span>
     </div>
@@ -184,21 +186,28 @@ function OcrVersionMeta({ envCheck, cliStatus }: { envCheck: EnvCheckResult | nu
 }
 
 function ActiveProviderBanner({ config }: { config: OcrConfig | null }) {
+  const t = useT();
   const active = describeActiveProvider(config);
   if (!active) {
     return (
       <div class="active-provider-banner empty">
-        <span class="active-provider-label">当前使用</span>
-        <span class="active-provider-empty-text">尚未配置 Provider</span>
+        <span class="active-provider-label">{t('view.config.currentUse')}</span>
+        <span class="active-provider-empty-text">{t('view.config.notConfigured')}</span>
       </div>
     );
   }
-  const kindLabel = active.kind === 'official' ? '官方' : active.kind === 'custom' ? '自定义' : 'Legacy';
+  const kindLabelMap: Record<string, string> = {
+    official: t('view.config.officialLabel'),
+    custom: t('view.config.customLabel'),
+    legacy: t('view.config.legacyLabel'),
+  };
+  const kindLabel = kindLabelMap[active.kind] ?? t('view.config.legacyLabel');
+  const displayName = active.kind === 'legacy' ? t('ext.config.legacyDisplayName') : active.displayName;
   return (
     <div class="active-provider-banner">
-      <span class="active-provider-label">当前使用</span>
+      <span class="active-provider-label">{t('view.config.currentUse')}</span>
       <span class="active-provider-badge">{kindLabel}</span>
-      <span class="active-provider-name">{active.displayName}</span>
+      <span class="active-provider-name">{displayName}</span>
       <span class="active-provider-dot">·</span>
       <span class="active-provider-model">{active.model}</span>
       {active.detail && (
@@ -231,12 +240,13 @@ function ProviderStep({
   onActivateCustomProvider?: (name: string) => void;
   onClearConnTest?: () => void;
 }) {
+  const t = useT();
   return (
     <div class="wizard-body provider-step">
       <div class="segmented-control">
         {([
-          ['official', '官方 Provider'],
-          ['custom', '自定义 Provider'],
+          ['official', t('view.config.official')],
+          ['custom', t('view.config.custom')],
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -297,11 +307,12 @@ function FormItem({
   hint?: string;
   children: ComponentChildren;
 }) {
+  const t = useT();
   return (
     <div class={`form-item${span === 2 ? ' span-2' : ''}`}>
       <label class="form-label">
         {label}
-        {optional && <span class="optional">（可选）</span>}
+        {optional && <span class="optional">{t('view.config.optional')}</span>}
       </label>
       {children}
       {hint && <div class="form-hint">{hint}</div>}
@@ -310,6 +321,7 @@ function FormItem({
 }
 
 function OfficialForm({ wide, config, connTest, onBack, onTest, onSave }: FormProps) {
+  const t = useT();
   const initialProvider = config?.provider && PROVIDER_PRESETS.some((p) => p.name === config.provider)
     ? config.provider
     : PROVIDER_PRESETS[0].name;
@@ -373,13 +385,13 @@ function OfficialForm({ wide, config, connTest, onBack, onTest, onSave }: FormPr
         />
       </FormItem>
 
-      <FormItem label="模型">
+      <FormItem label={t('view.config.model')}>
         <Select
           value={modelChoice}
           onChange={setModelChoice}
           options={[
             ...modelOptions.map((m) => ({ value: m, label: m })),
-            { value: MODEL_CUSTOM, label: '输入自定义模型…' },
+            { value: MODEL_CUSTOM, label: t('view.config.customModel') },
           ]}
         />
         {modelChoice === MODEL_CUSTOM && (
@@ -393,13 +405,13 @@ function OfficialForm({ wide, config, connTest, onBack, onTest, onSave }: FormPr
       </FormItem>
 
       <FormItem
-        label="API 密钥"
-        hint={`也可通过环境变量 ${preset.envVar} 提供密钥`}
+        label={t('view.config.apiKey')}
+        hint={`${t('view.config.apiKeyEnvHint')} ${preset.envVar}`}
       >
         <PasswordInput
           value={apiKey}
           onInput={(v) => { setApiKey(v); setApiKeyTouched(true); }}
-          placeholder={hasStoredKey && !apiKeyTouched ? '已保存（留空保持不变）' : 'sk-...'}
+          placeholder={hasStoredKey && !apiKeyTouched ? t('view.config.apiKeySaved') : 'sk-...'}
         />
       </FormItem>
 
@@ -414,6 +426,7 @@ function CustomForm({
   selection: string;
   onBackToList?: () => void;
 }) {
+  const t = useT();
   const isCreate = selection === CUSTOM_NEW;
   const entry = !isCreate ? config?.customProviders[selection] : undefined;
 
@@ -470,11 +483,11 @@ function CustomForm({
     <FormSection wide={wide}>
       {onBackToList && (
         <div class="form-item span-2">
-          <button type="button" class="btn-text back-link" onClick={onBackToList}>← 返回列表</button>
+          <button type="button" class="btn-text back-link" onClick={onBackToList}>{t('view.config.backToList')}</button>
         </div>
       )}
 
-      <FormItem label="Provider 名称">
+      <FormItem label={t('view.config.providerName')}>
         <input
           class="form-input"
           value={name}
@@ -483,7 +496,7 @@ function CustomForm({
           placeholder="my-llm"
         />
       </FormItem>
-      <FormItem label="协议">
+      <FormItem label={t('view.config.protocol')}>
         <Select
           value={protocol}
           onChange={(v) => setProtocol(v as 'anthropic' | 'openai')}
@@ -493,26 +506,26 @@ function CustomForm({
           ]}
         />
       </FormItem>
-      <FormItem label="Base URL" span={2}>
+      <FormItem label={t('view.config.baseUrl')} span={2}>
         <input class="form-input" value={url} onInput={(e) => setUrl((e.target as HTMLInputElement).value)} placeholder="https://api.example.com/v1" />
       </FormItem>
-      <FormItem label="模型">
+      <FormItem label={t('view.config.model')}>
         <input class="form-input" value={model} onInput={(e) => setModel((e.target as HTMLInputElement).value)} placeholder="model name" />
       </FormItem>
-      <FormItem label="模型列表" optional>
-        <input class="form-input" value={models} onInput={(e) => setModels((e.target as HTMLInputElement).value)} placeholder="逗号分隔，如 model-a, model-b" />
+      <FormItem label={t('view.config.modelList')} optional>
+        <input class="form-input" value={models} onInput={(e) => setModels((e.target as HTMLInputElement).value)} placeholder={t('view.config.modelListPlaceholder')} />
       </FormItem>
-      <FormItem label="API 密钥" span={2}>
+      <FormItem label={t('view.config.apiKey')} span={2}>
         <PasswordInput
           value={apiKey}
           onInput={(v) => { setApiKey(v); setApiKeyTouched(true); }}
-          placeholder={!isCreate && entry?.apiKey && !apiKeyTouched ? '已保存（留空保持不变）' : 'sk-...'}
+          placeholder={!isCreate && entry?.apiKey && !apiKeyTouched ? t('view.config.apiKeySaved') : 'sk-...'}
         />
       </FormItem>
-      <FormItem label="Auth Header" optional hint="Anthropic 协议下可选 x-api-key 或 authorization">
-        <Select value={authHeader} placeholder="默认 (Authorization)" onChange={setAuthHeader}
+      <FormItem label={t('view.config.authHeader')} optional hint={t('view.config.authHeaderHint')}>
+        <Select value={authHeader} placeholder={t('view.config.authHeaderDefault')} onChange={setAuthHeader}
           options={[
-            { value: '', label: '默认 (Authorization)' },
+            { value: '', label: t('view.config.authHeaderDefault') },
             { value: 'x-api-key', label: 'x-api-key' },
             { value: 'authorization', label: 'authorization' },
           ]} />
@@ -536,19 +549,20 @@ function ConnActions({ wide, connTest, canSave, onBack, onTest, onSave }: {
   connTest: ConnTest; canSave: boolean;
   onBack: () => void; onTest: () => void; onSave: () => void;
 }) {
+  const t = useT();
   return (
     <div class={`form-footer${wide ? ' page-footer' : ''}`}>
       {connTest.status !== 'idle' && (
         <div class={`conn-result ${connTest.status}`}>
-          {connTest.status === 'testing' && '正在测试连接…'}
-          {connTest.status === 'ok' && '✓ 连接成功'}
-          {connTest.status === 'fail' && `✗ 连接失败${connTest.message ? '：' + connTest.message : ''}`}
+          {connTest.status === 'testing' && t('view.config.testing')}
+          {connTest.status === 'ok' && t('view.config.testOk')}
+          {connTest.status === 'fail' && t(connTest.message ? 'view.config.testFailDetail' : 'view.config.testFail').replace('{message}', connTest.message ?? '')}
         </div>
       )}
       <div class="form-actions">
-        <button type="button" class="btn-default" onClick={onBack}>上一步</button>
-        <button type="button" class="btn-default" disabled={connTest.status === 'testing' || !canSave} onClick={onTest}>测试连接</button>
-        <button type="button" class="btn-primary" disabled={!canSave} onClick={onSave}>保存</button>
+        <button type="button" class="btn-default" onClick={onBack}>{t('view.config.previous')}</button>
+        <button type="button" class="btn-default" disabled={connTest.status === 'testing' || !canSave} onClick={onTest}>{t('view.config.test')}</button>
+        <button type="button" class="btn-primary" disabled={!canSave} onClick={onSave}>{t('view.config.save')}</button>
       </div>
     </div>
   );

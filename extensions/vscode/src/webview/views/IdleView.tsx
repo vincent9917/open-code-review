@@ -1,23 +1,9 @@
 import { useState, useEffect } from 'preact/hooks';
+import { useT } from '../I18nProvider';
 import { GitState, ReviewMode, CliRunOptions, FileChange } from '../../shared/types';
 import { FileList } from '../components/FileList';
 import { Select } from '../components/Select';
 
-function getPrimaryLabel(params: {
-  configured: boolean;
-  running?: boolean;
-  selectionReady: boolean;
-  mode: ReviewMode;
-  filesCount: number;
-}): string {
-  if (!params.configured) return '请先配置模型';
-  if (params.running) return '审查中…';
-  if (!params.selectionReady) {
-    return params.mode === 'branch' ? '请选择对比分支' : '请选择提交';
-  }
-  if (params.filesCount === 0) return '无可审查文件';
-  return '审查所有变更';
-}
 
 interface Props {
   gitState: GitState;
@@ -39,6 +25,17 @@ export function IdleView({ gitState, modeFiles, filesLoading, configured, onMode
   const [to, setTo] = useState('');
   const [commit, setCommit] = useState('');
   const [prompt, setPrompt] = useState('');
+  const t = useT();
+
+  const getPrimaryLabel = () => {
+    if (!configured) return t('view.idle.configFirst');
+    if (running) return t('view.idle.reviewing');
+    if (!selectionReady) {
+      return mode === 'branch' ? t('view.idle.selectBranch') : t('view.idle.selectCommit');
+    }
+    if (files.length === 0) return t('view.idle.noFiles');
+    return t('view.idle.reviewAll');
+  };
 
   const switchMode = (m: ReviewMode) => { setMode(m); onModeChange(m); };
 
@@ -75,25 +72,25 @@ export function IdleView({ gitState, modeFiles, filesLoading, configured, onMode
       <div class="mode-tabs">
         {(['workspace', 'branch', 'commit'] as ReviewMode[]).map((m) => (
           <button key={m} class={`mode-tab${mode === m ? ' active' : ''}`} onClick={() => switchMode(m)}>
-            {m === 'workspace' ? '工作区' : m === 'branch' ? '分支对比' : '单次提交'}
+            {m === 'workspace' ? t('view.idle.workspace') : m === 'branch' ? t('view.idle.branch') : t('view.idle.commit')}
           </button>
         ))}
       </div>
 
       {mode === 'branch' && (
         <div class="mode-params active">
-          <div class="mode-param-label">基础引用</div>
-          <Select value={from} placeholder="选择分支" onChange={setFrom}
+          <div class="mode-param-label">{t('view.idle.baseRef')}</div>
+          <Select value={from} placeholder={t('view.idle.chooseBranch')} onChange={setFrom}
             options={gitState.branches.map((b) => ({ value: b, label: b }))} />
-          <div class="mode-param-label">目标引用</div>
-          <Select value={to} placeholder="选择分支" onChange={setTo}
+          <div class="mode-param-label">{t('view.idle.targetRef')}</div>
+          <Select value={to} placeholder={t('view.idle.chooseBranch')} onChange={setTo}
             options={gitState.branches.map((b) => ({ value: b, label: b }))} />
         </div>
       )}
 
       {mode === 'commit' && (
         <div class="mode-params active">
-          <div class="files-label">提交历史</div>
+          <div class="files-label">{t('view.idle.commitHistory')}</div>
           <div class="commit-list">
             {gitState.recentCommits.map((c) => (
               <label key={c.sha} class={`commit-row${commit === c.sha ? ' active' : ''}`} onClick={() => setCommit(c.sha)}>
@@ -111,14 +108,14 @@ export function IdleView({ gitState, modeFiles, filesLoading, configured, onMode
       <FileList files={files} loading={loading}
         onOpenFile={(f) => onOpenFile(f, mode, from, to, commit)} />
 
-      <textarea class="mode-param-input" rows={3} placeholder="自定义审查提示词（可选）"
+      <textarea class="mode-param-input" rows={3} placeholder={t('view.idle.customPrompt')}
         value={prompt} onInput={(e) => setPrompt((e.target as HTMLTextAreaElement).value)} />
 
       {configured && (
         <div class="setup-secondary">
-          <button type="button" class="link-btn" onClick={onOpenCustomProviders}>管理自定义 Provider</button>
+          <button type="button" class="link-btn" onClick={onOpenCustomProviders}>{t('view.idle.manageCustom')}</button>
           <span class="setup-secondary-sep">·</span>
-          <button type="button" class="link-btn" onClick={onOpenConfig}>模型配置</button>
+          <button type="button" class="link-btn" onClick={onOpenConfig}>{t('view.idle.modelConfig')}</button>
         </div>
       )}
 
@@ -127,7 +124,7 @@ export function IdleView({ gitState, modeFiles, filesLoading, configured, onMode
       ) : (
         <button class={`primary-btn${!configured ? ' configure' : ''}`} disabled={primaryDisabled}
           onClick={handlePrimary}>
-          {getPrimaryLabel({ configured, running, selectionReady, mode, filesCount: files.length })}
+          {getPrimaryLabel()}
         </button>
       )}
     </div>

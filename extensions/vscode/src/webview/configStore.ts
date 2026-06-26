@@ -1,6 +1,7 @@
 import { ConfigPanelFocus, isConfigReady } from '../shared/configUtils';
 import { ConfigPanelHostToWebview, HostToWebview } from '../shared/messages';
 import { EnvCheckResult, OcrConfig, LogLine } from '../shared/types';
+import { resolveLocale, t, SupportedLocale } from '../shared/i18n';
 
 export type CliStatus = 'unknown' | 'checking' | 'installed' | 'missing';
 export type ConnTest = { status: 'idle' | 'testing' | 'ok' | 'fail'; message?: string };
@@ -16,6 +17,7 @@ export interface ConfigPanelState {
   connTest: ConnTest;
   copyHint: string;
   errorHint: string;
+  locale: SupportedLocale;
 }
 
 export const configPanelInitialState: ConfigPanelState = {
@@ -29,6 +31,7 @@ export const configPanelInitialState: ConfigPanelState = {
   connTest: { status: 'idle' },
   copyHint: '',
   errorHint: '',
+  locale: 'en',
 };
 
 export type ConfigPanelLocalAction =
@@ -66,6 +69,7 @@ export function configPanelReducer(
         skipEnvCheck,
         envCheck: env,
         cliStatus: env ? envToCliStatus(env) : (skipEnvCheck ? 'installed' : 'unknown'),
+        locale: msg.locale,
       };
     }
     case 'configPanelFocus':
@@ -90,7 +94,7 @@ export function configPanelReducer(
     case 'installDone':
       return { ...state, installing: false };
     case 'copyDone':
-      return { ...state, copyHint: '已复制到剪贴板' };
+      return { ...state, copyHint: t(resolveLocale(state.locale), 'view.env.copiedToast') };
     case 'clearCopyHint':
       return { ...state, copyHint: '' };
     case 'clearErrorHint':
